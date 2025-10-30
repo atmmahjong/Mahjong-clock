@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>麻雀クロック</title>
+  <style>
+    :root {
+      --bg: #0b0b0b;
+      --panel: #1a1a1a;
+      --text: #ffffff;
+      --muted: #bdbdbd;
+      --accent: #F6B26B;
+      --green: #4caf50;
+      --danger: #e53935;
+      --parent: #ff7043;
+      --input-bg: #1c1c1c;
+      font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      padding: 18px;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 40px;
+      margin: 0 0 14px;
+      font-weight: 1400;
+      text-align: center;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .clock {
+      background: linear-gradient(180deg, #171717, #0f0f0f);
+      border-radius: 12px;
+      padding: 14px;
+      border: 2px solid rgba(255,255,255,0.03);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 300px;
+      min-width: 200px;
+    }
+
+    .top {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+      gap: 4px;
+    }
+
+    .player-name {
+      font-size: 24px;
+      font-weight: 720;
+      color: #ffffff;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+      line-height: 1.2;
+      text-align: left;
+      display: block;           /* ← 折り返しを有効にするため追加 */
+      max-width: 100%;  
+    }
+
+    .time-info {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .time-current {
+      font-size: 60px;
+    }
+
+    .time-initial {
+      font-size: 16px;
+      color: var(--muted);
+    }
+
+    .grace-display {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+      height: 24px;
+    }
+
+    .bar-wrap {
+      height: 14px;
+      background: #0b0b0b;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 100%;
+      background: var(--green);
+      transform-origin: right center;
+      transition: width 0.4s linear;
+    }
+
+    /* ▼ 追加：バーと設定欄の間のスペース */
+    .spacer {
+      height: 30px;
+    }
+
+    /* ▼ 入力欄 + 親ボタン配置 */
+    .settings {
+      display: grid;
+      grid-template-columns: 1fr 60px; /* 左:入力欄 / 右:親ボタン */
+      grid-template-rows: repeat(2, auto);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .settings input[type="text"] {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+      background: var(--input-bg);
+      color: var(--text);
+      width: 100%;
+    }
+
+    /* 「親」ボタン */
+    .designate {
+      grid-row: 1 / span 2;
+      grid-column: 2;
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.03);
+      background: var(--input-bg);
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--text);
+      transition: background 0.2s;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .designate.active {
+      background: var(--parent);
+      color: #111;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .controls button {
+      background: var(--accent);
+      border: none;
+      color: #111;
+      width: 140px;
+      height: 50px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 750;
+      font-size: 20px;
+      transition: background 0.15s;
+    }
+
+    .controls button:hover { background: #e0a95a; }
+    .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .footer-note {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 16px;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 1000px) {
+      .board { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 500px) {
+      .board { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>麻雀クロック</h1>
+  <div class="board" id="board"></div>
+
+  <div class="controls">
+    <button id="resetBtn">リセット</button>
+    <button id="nextBtn">進行</button>
+    <button id="pauseBtn">一時停止</button>
+    <button id="resumeBtn">再開</button>
+  </div>
+
+  <div class="footer-note">
+    進行ボタンを押すことで親からタイマーが開始し、もう一度押すと次の人のタイマーが開始します。<br>
+    局が終了したらリセットボタンを押し、次局の親を指定してください。<br>
+    トラブルが起きた場合は一時停止ボタンを押し、トラブルが解決したら再開ボタンを押してください。
+  </div>
+
+  <script>
+    const NUM = 4;
+    function makeClock(i){return {id:i,name:'',initialSeconds:6*60,remaining:6*60,running:false,graceActive:false,graceTimeoutId:null,intervalId:null,designatedStart:(i===0),paused:false};}
+    const clocks = Array.from({length:NUM},(_,i)=>makeClock(i));
+    let activeIndex = null;
+
+    const board = document.getElementById('board');
+    const nextBtn = document.getElementById('nextBtn');
+
+    function formatTime(sec){
+      if(sec<0) sec=0;
+      const m = Math.floor(sec/60).toString().padStart(2,'0');
+      const s = Math.floor(sec%60).toString().padStart(2,'0');
+      return `${m}:${s}`;
+    }
+
+    function createClockCard(clock){
+      const el = document.createElement('div'); el.className='clock'; el.dataset.id=clock.id;
+
+      const top = document.createElement('div'); top.className='top';
+      const name = document.createElement('div'); name.className='player-name'; name.textContent = clock.name || `Player ${clock.id+1}`;
+
+      const timeInfo = document.createElement('div'); timeInfo.className='time-info';
+      const timeCurrent = document.createElement('span'); timeCurrent.className='time-current'; timeCurrent.textContent = formatTime(clock.remaining);
+      const timeInitial = document.createElement('span'); timeInitial.className='time-initial'; timeInitial.textContent = `/ ${formatTime(clock.initialSeconds)}`;
+      timeInfo.appendChild(timeCurrent);
+      timeInfo.appendChild(timeInitial);
+
+      top.appendChild(name);
+      top.appendChild(timeInfo);
+
+      const graceDisplay = document.createElement('div');
+      graceDisplay.className = 'grace-display';
+      graceDisplay.textContent = '';
+
+      const barWrap = document.createElement('div'); barWrap.className='bar-wrap';
+      const bar = document.createElement('div'); bar.className='bar'; bar.style.width = '100%';
+      barWrap.appendChild(bar);
+
+      // ★ 追加：スペース
+      const spacer = document.createElement('div');
+      spacer.className = 'spacer';
+
+      // ▼ 入力欄 + 親ボタン
+      const settings = document.createElement('div'); settings.className='settings';
+      const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.placeholder='選手名'; nameInput.value=clock.name;
+      nameInput.addEventListener('input', ()=>{ clock.name = nameInput.value; updateClockDom(clock); });
+
+      const timeInput = document.createElement('input'); timeInput.type='text'; timeInput.value=formatTime(clock.initialSeconds);
+      timeInput.addEventListener('change', ()=>{
+        const v=timeInput.value.trim();const valid=/^([0-5]\d):([0-5]\d)$/;
+        if(!valid.test(v)){alert("mm:ss形式で入力してください。");timeInput.value=formatTime(clock.initialSeconds);return;}
+        const[_,mm,ss]=v.match(valid);
+        const total=parseInt(mm)*60+parseInt(ss);
+        if(total<1||total>3599){alert("00:01〜59:59の範囲で入力してください。");timeInput.value=formatTime(clock.initialSeconds);return;}
+        clock.initialSeconds=total;clock.remaining=total;updateClockDom(clock);
+      });
+
+      const designate=document.createElement('div'); designate.className='designate'; designate.textContent='親';
+      if(clock.designatedStart) designate.classList.add('active');
+      designate.addEventListener('click',()=>{clocks.forEach(c=>c.designatedStart=false);clock.designatedStart=true;renderAll();});
+
+      settings.appendChild(nameInput);
+      settings.appendChild(timeInput);
+      settings.appendChild(designate);
+
+      el.appendChild(top);
+      el.appendChild(graceDisplay);
+      el.appendChild(barWrap);
+      el.appendChild(spacer);
+      el.appendChild(settings);
+
+      clock._dom={el,name,timeCurrent,timeInitial,bar,graceDisplay,nameInput,timeInput,designate};
+      return el;
+    }
+
+    function renderAll(){
+      board.innerHTML='';
+      clocks.forEach(c=>{ board.appendChild(createClockCard(c)); updateClockDom(c); });
+    }
+
+    function updateClockDom(clock){
+      const d=clock._dom;if(!d)return;
+      d.name.textContent=clock.name||`Player ${clock.id+1}`;
+      d.timeCurrent.textContent=formatTime(clock.remaining);
+      d.timeInitial.textContent=`/ ${formatTime(clock.initialSeconds)}`;
+      const pct=Math.max(0,Math.min(100,(clock.remaining/clock.initialSeconds)*100));
+      d.bar.style.width=pct+'%';
+      d.bar.style.background=clock.remaining<60?'var(--danger)':'var(--green)';
+      d.designate.classList.toggle('active',clock.designatedStart);
+      d.graceDisplay.textContent = clock.graceActive ? '猶予中' : '';
+    }
+
+    function tick(c){if(!c.running||c.graceActive)return;c.remaining=Math.max(0,c.remaining-1);updateClockDom(c);if(c.remaining<=0)stopClock(c.id);}
+    function startClock(id,withGrace=true){
+      const c=clocks[id];if(c.remaining<=0)return;
+      clocks.forEach((x,i)=>{if(x.running&&i!==id)stopClock(i);});
+      c.running=true;c.paused=false;activeIndex=id;updateNextButtonState();
+      if(withGrace){c.graceActive=true;if(c.graceTimeoutId)clearTimeout(c.graceTimeoutId);
+        c.graceTimeoutId=setTimeout(()=>{c.graceActive=false;c.graceTimeoutId=null;updateClockDom(c);},6000);}
+      else c.graceActive=false;
+      if(c.intervalId)clearInterval(c.intervalId);
+      c.intervalId=setInterval(()=>tick(c),1000);
+      updateClockDom(c);
+    }
+
+    function stopClock(id){
+      const c=clocks[id];if(!c)return;
+      c.running=false;c.graceActive=false;
+      if(c.intervalId){clearInterval(c.intervalId);c.intervalId=null;}
+      if(c.graceTimeoutId){clearTimeout(c.graceTimeoutId);c.graceTimeoutId=null;}
+      if(activeIndex===id)activeIndex=null;updateNextButtonState();updateClockDom(c);
+    }
+
+    function updateNextButtonState(){ nextBtn.disabled = clocks.some(c=>c.paused); }
+
+    document.getElementById('resetBtn').addEventListener('click',()=>{
+      if(!confirm("リセットしますか？"))return;
+      clocks.forEach((c,i)=>{
+        c.remaining=c.initialSeconds=6*60;
+        c.running=false;c.graceActive=false;c.paused=false;c.designatedStart=(i===0);
+        if(c.intervalId)clearInterval(c.intervalId);
+        if(c.graceTimeoutId)clearTimeout(c.graceTimeoutId);
+      });
+      activeIndex=null;renderAll();updateNextButtonState();
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click',()=>{
+      if(activeIndex===null)return;
+      const c=clocks[activeIndex];if(!c.running)return;
+      c.paused=true;if(c.intervalId){clearInterval(c.intervalId);c.intervalId=null;}
+      if(c.graceTimeoutId){clearTimeout(c.graceTimeoutId);c.graceTimeoutId=null;c.graceActive=false;}
+      c.running=false;updateClockDom(c);updateNextButtonState();
+    });
+
+    document.getElementById('resumeBtn').addEventListener('click',()=>{
+      const idx=clocks.findIndex(c=>c.paused);if(idx===-1)return;
+      const c=clocks[idx];c.paused=false;startClock(idx,false);updateNextButtonState();
+    });
+
+    nextBtn.addEventListener('click',()=>{
+      if(clocks.some(c=>c.paused))return;
+      if(activeIndex===null){const startIdx=clocks.findIndex(c=>c.designatedStart)||0;startClock(startIdx,true);return;}
+      const cur=activeIndex;stopClock(cur);const next=(cur+1)%NUM;startClock(next,true);
+    });
+
+    renderAll();updateNextButtonState();
+  </script>
+</body>
+</html>
