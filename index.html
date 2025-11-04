@@ -53,6 +53,12 @@
       min-width: 200px;
     }
 
+    .clock.active {
+      background: linear-gradient(180deg, #2a2a2a, #1a1a1a);
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
     .top {
       display: flex;
       flex-direction: column;
@@ -204,6 +210,10 @@
     @media (max-width: 500px) {
       .board { grid-template-columns: 1fr; }
     }
+
+    .clock.paused .bar {
+      background: gray !important;
+    }
   </style>
 </head>
 <body>
@@ -220,7 +230,9 @@
   <div class="footer-note">
     進行ボタンを押すことで親からタイマーが開始し、もう一度押すと次の人のタイマーが開始します。<br>
     局が終了したらリセットボタンを押し、次局の親を指定してください。<br>
-    トラブルが起きた場合は一時停止ボタンを押し、トラブルが解決したら再開ボタンを押してください。
+    トラブルが起きた場合は一時停止ボタンを押し、トラブルが解決したら再開ボタンを押してください。<br>
+    各ボタンはテンキーに対応しています。<br>
+    親ボタン:1 2 3 4　リセットボタン:0　進行ボタン:Enter　一時停止ボタン:＋　再開ボタン:ー
   </div>
 
   <script>
@@ -313,7 +325,8 @@
       d.bar.style.width=pct+'%';
       d.bar.style.background=clock.remaining<60?'var(--danger)':'var(--green)';
       d.designate.classList.toggle('active',clock.designatedStart);
-      d.graceDisplay.textContent = clock.graceActive ? '猶予中' : '';
+      d.graceDisplay.textContent = clock.graceActive ? '猶予時間' : '';
+      d.el.classList.toggle('active', clock.running);
     }
 
     function tick(c){if(!c.running||c.graceActive)return;c.remaining=Math.max(0,c.remaining-1);updateClockDom(c);if(c.remaining<=0)stopClock(c.id);}
@@ -337,39 +350,110 @@
       if(activeIndex===id)activeIndex=null;updateNextButtonState();updateClockDom(c);
     }
 
-    function updateNextButtonState(){ nextBtn.disabled = clocks.some(c=>c.paused); }
+    function updateNextButtonState(){ 
+      nextBtn.disabled = false;
+      nextBtn.style.opacity = 1; 
+    }
 
     document.getElementById('resetBtn').addEventListener('click',()=>{
       if(!confirm("リセットしますか？"))return;
       clocks.forEach((c,i)=>{
         c.remaining=c.initialSeconds=6*60;
-        c.running=false;c.graceActive=false;c.paused=false;c.designatedStart=(i===0);
+        c.running=false;
+        c.graceActive=false;
+        c.paused=false;
+        c.designatedStart=(i===0);
         if(c.intervalId)clearInterval(c.intervalId);
         if(c.graceTimeoutId)clearTimeout(c.graceTimeoutId);
+        c.name="";
       });
-      activeIndex=null;renderAll();updateNextButtonState();
+      activeIndex=null;
+      renderAll();
+      updateNextButtonState();
     });
 
     document.getElementById('pauseBtn').addEventListener('click',()=>{
       if(activeIndex===null)return;
       const c=clocks[activeIndex];if(!c.running)return;
-      c.paused=true;if(c.intervalId){clearInterval(c.intervalId);c.intervalId=null;}
+      c.paused=true;
+      if(c.intervalId){clearInterval(c.intervalId);c.intervalId=null;}
       if(c.graceTimeoutId){clearTimeout(c.graceTimeoutId);c.graceTimeoutId=null;c.graceActive=false;}
-      c.running=false;updateClockDom(c);updateNextButtonState();
+      c.running=false;
+      updateClockDom(c);
+      updateNextButtonState();
+      document.querySelectorAll('.clock').forEach(el => el.classList.add('paused'));
     });
 
     document.getElementById('resumeBtn').addEventListener('click',()=>{
       const idx=clocks.findIndex(c=>c.paused);if(idx===-1)return;
-      const c=clocks[idx];c.paused=false;startClock(idx,false);updateNextButtonState();
+      const c=clocks[idx];
+      c.paused=false;
+      startClock(idx,false);
+      updateNextButtonState();
+      document.querySelectorAll('.clock').forEach(el => el.classList.remove('paused'));
     });
 
     nextBtn.addEventListener('click',()=>{
-      if(clocks.some(c=>c.paused))return;
-      if(activeIndex===null){const startIdx=clocks.findIndex(c=>c.designatedStart)||0;startClock(startIdx,true);return;}
-      const cur=activeIndex;stopClock(cur);const next=(cur+1)%NUM;startClock(next,true);
+      const pausedClock = clocks.find(c => c.paused);
+      if (pausedClock) {
+        clocks.forEach(c => {
+          c.paused = false;
+          c.running = false;
+          if (c._dom && c._dom.el) c._dom.el.classList.remove('paused');
+        });
+
+        // 一時停止中でも「親」指定のクロックから再開できる
+        const startIdx = clocks.findIndex(c => c.designatedStart);
+        if (startIdx !== -1) {
+          startClock(startIdx, true);
+          return;
+        }
+      }
+
+      if (activeIndex === null) {
+        const startIdx = clocks.findIndex(c => c.designatedStart);
+        startClock(startIdx !== -1 ? startIdx : 0, true);
+        return;
+      }
+
+      const cur = activeIndex;
+      stopClock(cur);
+      const next = (cur + 1) % NUM;
+      startClock(next, true);
     });
 
     renderAll();updateNextButtonState();
+
+    document.addEventListener('keydown', (e) => {
+      switch (e.code) {
+        case 'Numpad1':
+          designateParent(0); break;
+        case 'Numpad2':
+          designateParent(1); break;
+        case 'Numpad3':
+          designateParent(2); break;
+        case 'Numpad4':
+          designateParent(3); break;
+        case 'Numpad0':
+          document.getElementById('resetBtn').click();
+          break;
+        case 'NumpadEnter':
+          document.getElementById('nextBtn').click();
+          break;
+        case 'NumpadAdd':
+          document.getElementById('pauseBtn').click();
+          break;
+        case 'NumpadSubtract':
+          document.getElementById('resumeBtn').click();
+          break;
+      }
+    });
+
+    function designateParent(index) {
+      clocks.forEach(c => c.designatedStart = false);
+      if (clocks[index]) clocks[index].designatedStart = true;
+      renderAll();
+    }
   </script>
 </body>
 </html>
